@@ -7,9 +7,14 @@ https://www.online-utility.org/image/convert/to/XBM
 
 #include "configs.h"
 
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+
 #ifndef HAS_SCREEN
-  #define MenuFunctions_h
-  #define Display_h
+#define MenuFunctions_h
+#define Display_h
 #endif
 
 #include <WiFi.h>
@@ -123,6 +128,82 @@ const String PROGMEM version_number = MARAUDER_VERSION;
 
 uint32_t currentTime  = 0;
 
+// BLE Echo Service Implementation
+BLEServer* pServer = NULL;
+BLECharacteristic* pTxCharacteristic = NULL;
+bool deviceConnected = false;
+bool oldDeviceConnected = false;
+
+#define SERVICE_UUID           "6E400001-B5A3-F393-E0A9-E50E24DCCA9E" // UART service UUID
+#define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
+#define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+
+class MyServerCallbacks: public BLEServerCallbacks {
+    void onConnect(BLEServer* pServer) {
+      deviceConnected = true;
+    }
+
+    void onDisconnect(BLEServer* pServer) {
+      deviceConnected = false;
+    }
+};
+
+class MyCallbacks: public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic *pCharacteristic) {
+      std::string rxValue = pCharacteristic->getValue();
+
+      if (rxValue.length() > 0) {
+        Serial.print("Received Value: ");
+        for (int i = 0; i < rxValue.length(); i++)
+          Serial.print(rxValue[i]);
+
+        Serial.println();
+
+        // Echo the value back
+        pTxCharacteristic->setValue(rxValue);
+        pTxCharacteristic->notify();
+        Serial.print("Sent Value: ");
+        Serial.println(rxValue.c_str());
+      }
+    }
+};
+
+void setupBLE() {
+  // Create the BLE Device
+  BLEDevice::init("ESP32 Marauder");
+
+  // Create the BLE Server
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+
+  // Create the BLE Service
+  BLEService *pService = pServer->createService(SERVICE_UUID);
+
+  // Create a BLE Characteristic for sending data
+  pTxCharacteristic = pService->createCharacteristic(
+										CHARACTERISTIC_UUID_TX,
+										BLECharacteristic::PROPERTY_NOTIFY
+									);
+                      
+  pTxCharacteristic->addDescriptor(new BLE2902());
+
+  // Create a BLE Characteristic for receiving data
+  BLECharacteristic *pRxCharacteristic = pService->createCharacteristic(
+											 CHARACTERISTIC_UUID_RX,
+											BLECharacteristic::PROPERTY_WRITE
+										);
+
+  pRxCharacteristic->setCallbacks(new MyCallbacks());
+
+  // Start the service
+  pService->start();
+
+  // Start advertising
+  pServer->getAdvertising()->start();
+  Serial.println("Waiting a client connection to notify...");
+}
+
+
 void backlightOn() {
   #ifdef HAS_SCREEN
     #ifdef MARAUDER_MINI
@@ -199,6 +280,8 @@ void setup()
   #endif
 
   Serial.begin(115200);
+
+  setupBLE();
 
   while(!Serial)
     delay(10);
