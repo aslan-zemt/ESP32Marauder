@@ -12,6 +12,9 @@ https://www.online-utility.org/image/convert/to/XBM
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
+#include "MultiStream.h"
+#include "BleStream.h"
+
 #ifndef HAS_SCREEN
 #define MenuFunctions_h
 #define Display_h
@@ -89,6 +92,9 @@ Buffer buffer_obj;
 Settings settings_obj;
 CommandLine cli_obj;
 
+MultiStream multi_stream;
+BleStream* ble_stream = nullptr;
+
 #ifdef HAS_GPS
   GpsInterface gps_obj;
 #endif
@@ -153,17 +159,19 @@ class MyCallbacks: public BLECharacteristicCallbacks {
       std::string rxValue = pCharacteristic->getValue();
 
       if (rxValue.length() > 0) {
-        Serial.print("Received Value: ");
-        for (int i = 0; i < rxValue.length(); i++)
-          Serial.print(rxValue[i]);
+        String command = String(rxValue.c_str());
+        command.trim();
 
-        Serial.println();
+        if (command.length() > 0) {
+          // Print the command to all streams for logging, consistent with serial
+          multi_stream.println("#" + command);
+          
+          // Execute the command
+          cli_obj.runCommand(command);
 
-        // Echo the value back
-        pTxCharacteristic->setValue(rxValue);
-        pTxCharacteristic->notify();
-        Serial.print("Sent Value: ");
-        Serial.println(rxValue.c_str());
+          // Print the prompt again to all streams
+          multi_stream.print("> ");
+        }
       }
     }
 };
@@ -201,6 +209,10 @@ void setupBLE() {
   // Start advertising
   pServer->getAdvertising()->start();
   Serial.println("Waiting a client connection to notify...");
+
+  // Create the BLE stream and add it to the multi-stream
+  ble_stream = new BleStream(pTxCharacteristic);
+  multi_stream.add(ble_stream);
 }
 
 
@@ -281,18 +293,21 @@ void setup()
 
   Serial.begin(115200);
 
+  // Add Serial to our multi-stream output
+  multi_stream.add(&Serial);
+
   setupBLE();
 
   while(!Serial)
     delay(10);
 
-  Serial.println("ESP-IDF version is: " + String(esp_get_idf_version()));
+  multi_stream.println("ESP-IDF version is: " + String(esp_get_idf_version()));
 
   #ifdef HAS_PSRAM
     if (psramInit()) {
-      Serial.println("PSRAM is correctly initialized");
+      multi_stream.println("PSRAM is correctly initialized");
     } else {
-      Serial.println("PSRAM not available");
+      multi_stream.println("PSRAM not available");
     }
   #endif
 
@@ -328,7 +343,7 @@ void setup()
 
         backlightOff();
 
-        Serial.println("Headless Mode enabled");
+        multi_stream.println("Headless Mode enabled");
       }
     #endif
 
@@ -351,7 +366,7 @@ void setup()
   #if defined(HAS_SD)
     // Do some SD stuff
     if(!sd_obj.initSD())
-      Serial.println(F("SD Card NOT Supported"));
+      multi_stream.println(F("SD Card NOT Supported"));
 
   #endif
 
@@ -397,7 +412,7 @@ void setup()
 
   wifi_scan_obj.StartScan(WIFI_SCAN_OFF);
   
-  Serial.println(F("CLI Ready"));
+  multi_stream.println(F("CLI Ready"));
   cli_obj.RunSetup();
 }
 
@@ -428,6 +443,18 @@ void loop()
       }
     #endif
   #endif
+
+  // Handle BLE connection status
+  if (deviceConnected && !oldDeviceConnected) {
+    oldDeviceConnected = true;
+    multi_stream.println("BLE Client Connected");
+    multi_stream.print("> ");
+  }
+  if (!deviceConnected && oldDeviceConnected) {
+    oldDeviceConnected = false;
+    // Only print to serial since BLE is gone
+    Serial.println("BLE Client Disconnected");
+  }
 
   // Update all of our objects
   cli_obj.main(currentTime);
@@ -467,6 +494,11 @@ void loop()
   #else
     led_obj.main(currentTime);
   #endif
+
+  // If a BLE client is connected, flush any buffered data
+  if (deviceConnected && ble_stream != nullptr) {
+    ble_stream->flush();
+  }
 
   #ifdef HAS_SCREEN
     delay(1);

@@ -4,6 +4,8 @@
 #define CommandLine_h
 
 #include "configs.h"
+#include "MultiStream.h"
+#include <list>
 
 #ifdef HAS_SCREEN
   #include "MenuFunctions.h"
@@ -30,13 +32,14 @@ extern WiFiScan wifi_scan_obj;
 #endif
 extern Settings settings_obj;
 extern LedInterface led_obj;
-extern LinkedList<AccessPoint>* access_points;
-extern LinkedList<AirTag>* airtags;
-extern LinkedList<ssid>* ssids;
-extern LinkedList<Station>* stations;
-extern LinkedList<IPAddress>* ipList;
+extern std::list<AccessPoint>* access_points;
+extern std::list<AirTag>* airtags;
+extern std::list<ssid>* ssids;
+extern std::list<Station>* stations;
+extern std::list<IPAddress>* ipList;
 extern const String PROGMEM version_number;
 extern const String PROGMEM board_target;
+extern MultiStream multi_stream;
 
 //// Commands
 
@@ -170,16 +173,15 @@ const char PROGMEM HELP_FOOT[] = "==================================";
 class CommandLine {
   private:
     String getSerialInput();
-    LinkedList<String> parseCommand(String input, char* delim);
+    std::list<String> parseCommand(String input, char* delim);
     String toLowerCase(String str);
     void filterAccessPoints(String filter);
-    void runCommand(String input);
-    bool checkValueExists(LinkedList<String>* cmd_args_list, int index);
+    bool checkValueExists(std::list<String>* cmd_args_list, int index);
     bool inRange(int max, int index);
     bool apSelected();
     bool hasSSIDs();
     void showCounts(int selected, int unselected = -1);
-    int argSearch(LinkedList<String>* cmd_args, String key);
+    int argSearch(std::list<String>* cmd_args, String key);
 
     const char* ascii_art =
     "\r\n"
@@ -213,6 +215,7 @@ class CommandLine {
 
     void RunSetup();
     void main(uint32_t currentTime);
+    void runCommand(String input);
 };
 
 #endif

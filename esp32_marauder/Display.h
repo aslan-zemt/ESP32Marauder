@@ -10,7 +10,7 @@
 #include <FS.h>
 #include <functional>
 //#include <JPEGDecoder.h>
-#include <LinkedList.h>
+#include <list>
 #include <SPI.h>
 #include <lvgl.h>
 #include <Ticker.h>
@@ -96,10 +96,10 @@ class Display
     uint8_t print_delay_1, print_delay_2 = 10;
     uint8_t current_banner_pos = SCREEN_WIDTH;
 
-    LinkedList<String>* display_buffer;
+    std::list<String>* display_buffer;
 
     #ifdef SCREEN_BUFFER
-      LinkedList<String>* screen_buffer;
+      std::list<String>* screen_buffer;
     #endif
 
     // The initial y coordinate of the top of the bottom text line

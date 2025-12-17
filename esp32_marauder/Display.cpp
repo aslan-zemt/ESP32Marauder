@@ -1,5 +1,6 @@
 #include "Display.h"
 #include "lang_var.h"
+#include <iterator>
 
 #ifdef HAS_SCREEN
 
@@ -118,7 +119,7 @@ void Display::RunSetup()
   display_buffer = new LinkedList<String>();
 
   #ifdef SCREEN_BUFFER
-    screen_buffer = new LinkedList<String>();
+    screen_buffer = new std::list<String>();
   #endif
 
   #ifdef HAS_CYD_TOUCH
@@ -418,7 +419,7 @@ void Display::clearScreen()
 void Display::scrollScreenBuffer(bool down) {
   // Scroll screen normal direction (Up)
   if (!down) {
-    this->screen_buffer->shift();
+    this->screen_buffer->pop_front();
   }
 }
 #endif
@@ -470,7 +471,9 @@ void Display::displayBuffer(bool do_clear)
           yDraw = scroll_line(TFT_RED);
           tft.setCursor(xPos, yDraw);
           tft.setTextColor(TFT_GREEN, TFT_BLACK);
-          tft.print(display_buffer->shift());
+          String text = display_buffer->front();
+          display_buffer->pop_front();
+          tft.print(text);
           printing = false;
           delay(print_delay_2);
         }
@@ -483,7 +486,9 @@ void Display::displayBuffer(bool do_clear)
         if (this->screen_buffer->size() >= MAX_SCREEN_BUFFER)
           this->scrollScreenBuffer();
 
-        screen_buffer->add(display_buffer->shift());
+        String text = display_buffer->front();
+        display_buffer->pop_front();
+        screen_buffer->push_back(text);
 
         for (int i = 0; i < this->screen_buffer->size(); i++) {
           tft.setCursor(xPos, (i * 12) + (SCREEN_HEIGHT / 6));
@@ -491,7 +496,7 @@ void Display::displayBuffer(bool do_clear)
           tft.print(spaces);
           tft.setCursor(xPos, (i * 12) + (SCREEN_HEIGHT / 6));
 
-          this->processAndPrintString(tft, this->screen_buffer->get(i));
+          this->processAndPrintString(tft, *std::next(this->screen_buffer->begin(), i));
         }
       #endif
 
